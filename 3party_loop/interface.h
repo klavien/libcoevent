@@ -14,11 +14,11 @@ long long createTimeEvent(stCoEpoll_t *ctx, long long milliseconds, stTimeoutIte
 int deleteTimeEvent(void *eventLoop, stTimeoutItem_t *clientData);
 */
 
-// The libev interface has been fully implemented and well tested(I think so).
+// libev,libae interface has been fully implemented and well tested(I think so).
 #include "3party_loop/co_libev.cpp"
-// The redis ae interface has not been fully implemented.
 #include "3party_loop/co_libae.cpp"
 
 // The following event loop interface has not yet been implemented!!
+// but I am working on them.
 #include "3party_loop/co_libuv.cpp"
 #include "3party_loop/co_libevent.cpp"

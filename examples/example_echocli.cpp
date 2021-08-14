@@ -26,7 +26,7 @@
 #include <stdint.h>
 #include <time.h>
 #include <stack>
-
+#include <sys/wait.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <sys/un.h>
@@ -213,6 +213,7 @@ int main(int argc,char *argv[])
 
 		exit(0);
 	}
+	wait(NULL);
 	return 0;
 }
 /*./example_echosvr 127.0.0.1 10000 100 50*/

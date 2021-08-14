@@ -38,11 +38,10 @@ CFLAGS += -fno-strict-aliasing -Wall -export-dynamic \
 
 UNAME := $(shell uname -s)
 
-# to use libev, I linked ev library
 ifeq ($(UNAME), FreeBSD)
-LINKS += -L./lib -lcoevent -lpthread -lev
+LINKS += -L./lib -lcoevent -lpthread
 else
-LINKS += -L./lib -lcoevent -lpthread -ldl -lev
+LINKS += -L./lib -lcoevent -lpthread -ldl
 endif
 
 COLIB_OBJS=co_epoll.o co_routine.o co_hook_sys_call.o coctx_swap.o coctx.o co_comm.o

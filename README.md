@@ -37,10 +37,16 @@ Because I used libev for testing locally, the pre-defined macro USE_LIBEV of lib
 
 支持的事件库及宏定义如下：
 
-libev    --> USE_LIBEV    (已支持)
-libuv    --> USE_LIBUV    (暂不支持，支持中:-))
-libevent --> USE_LIBEVENT (暂不支持，支持中:-))
-libco原生 --> 不加任何USE_*宏定义
+1. libco原生 --> 不加任何USE_*宏定义 (已支持)  
+
+2. libev    --> USE_LIBEV    (已支持)  
+
+3. libae    --> USE_LIBAE    (redis内部使用的ae事件库，已支持)  
+
+4. libuv    --> USE_LIBUV    (暂不支持，支持中:-))  
+
+5. libevent --> USE_LIBEVENT (暂不支持，支持中:-))  
+
 
 ### 最后
 

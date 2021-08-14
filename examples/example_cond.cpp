@@ -24,7 +24,7 @@
 #include <stdlib.h>
 #include <queue>
 #include "co_routine.h"
-#include "ev.h"
+//#include "ev.h"
 using namespace std;
 struct stTask_t
 {
@@ -84,7 +84,7 @@ void* Consumer(void* args)
 	}
 	return NULL;
 }
-
+/*
 void timer_func1(EV_P_ ev_timer *et,int revent)
 {
 	// producer_routine cause mem leak,but we just make a use case here.
@@ -97,16 +97,19 @@ void timer_func2(EV_P_ ev_timer *et,int revent)
 {
 	printf("time:%f,this is ev timer_func2!\n",seconds());
 }
+*/
 int main()
 {
+	/*
 	EV_P =ev_default_loop(0);
-	co_seteventloop(loop); // if your loop already exists, just set it before the first corotine.
+	co_seteventloop(loop); // If your loop already exists, just set it before the first corotine.
     ev_timer et1;
     ev_timer_init(&et1,timer_func1,0,0);
     ev_timer_start(EV_A_ &et1);
 	ev_timer et2;
     ev_timer_init(&et2,timer_func2,1,1);
     ev_timer_start(EV_A_ &et2);
+	*/
 
 	env = new stEnv_t;
 	env->cond = co_cond_alloc();
@@ -119,7 +122,7 @@ int main()
 	co_create(&producer_routine, NULL, Producer, env);
 	co_resume(producer_routine);
 	
-	//co_eventloop(co_get_epoll_ct(), NULL, NULL);
-	ev_run(EV_A_ 0);
+	co_eventloop(co_get_epoll_ct(), NULL, NULL);
+	//ev_run(EV_A_ 0);
 	return 0;
 }

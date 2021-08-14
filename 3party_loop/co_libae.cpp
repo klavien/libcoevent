@@ -16,12 +16,24 @@
 */
 
 
-#ifdef USE_AE
+#ifdef USE_LIBAE
 #undef USE_LIBCO_LOOP
 #define USE_LIBCO_LOOP 0
 
 #include "ae.h"
-static uint32_t PollEvent2AE( short events )
+
+void *createEventLoop()
+{
+	// note!!!    1024*10 may not enouth to use,
+	// then you should adjust it manually by aeResizeSetSize().
+	return aeCreateEventLoop(1024*10);
+}
+int eventLoopRun(stCoEpoll_t *ctx)
+{
+	aeMain((aeEventLoop *)ctx->eventLoop);
+	return 0;
+}
+uint32_t PollEvent2Me( short events )
 {
 	uint32_t e = 0;	
 	if( events & POLLIN ) 	e |= AE_READABLE;
@@ -30,7 +42,7 @@ static uint32_t PollEvent2AE( short events )
 	//if( events & POLLERR )	e |= (AE_WRITABLE|AE_READABLE);
 	return e;
 }
-static short AEEvent2Poll( uint32_t events )
+short MyEvent2Poll( uint32_t events )
 {
 	short e = 0;	
 	if( events & AE_READABLE ) 	e |= POLLIN;
@@ -39,12 +51,12 @@ static short AEEvent2Poll( uint32_t events )
 	//if( events & (AE_WRITABLE|AE_READABLE) ) e |= POLLERR;
 	return e;
 }
-int deleteTimeEvent(void *eventLoop, long long id);
+int deleteTimeEvent(void *eventLoop, stTimeoutItem_t *clientData);
 static void fileProc(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask)
 {
     UNUSED(fd);
     stPollItem_t *lp = (stPollItem_t *)clientData;
-	lp->pSelf->revents = AEEvent2Poll(mask);
+	lp->pSelf->revents = MyEvent2Poll(mask);
 
 
 	stPoll_t *pPoll = lp->pPoll;
@@ -53,7 +65,7 @@ static void fileProc(struct aeEventLoop *eventLoop, int fd, void *clientData, in
 	if( !pPoll->iAllEventDetach )
 	{
 		pPoll->iAllEventDetach = 1;
-        deleteTimeEvent(eventLoop,pPoll->timerId);
+        deleteTimeEvent(eventLoop,pPoll);
 	}
     if(pPoll->pfnProcess) pPoll->pfnProcess(pPoll);
 }
@@ -65,12 +77,12 @@ static int timeProc(struct aeEventLoop *eventLoop, long long id, void *clientDat
     if(pPoll->pfnProcess) pPoll->pfnProcess(pPoll);
     return 0;
 }
-int createFileEvent(stCoEpoll_t *ctx, stTimeoutItem_t *clientData,size_t idx)
+int createFileEvent(stCoEpoll_t *ctx,stTimeoutItem_t *clientData,size_t idx)
 {
 	stPoll_t *arg=(stPoll_t*)clientData;
     return aeCreateFileEvent((aeEventLoop*)ctx->eventLoop,
 		arg->pPollItems[idx].pSelf->fd,
-		PollEvent2AE(arg->pPollItems[idx].pSelf->events),
+		PollEvent2Me(arg->pPollItems[idx].pSelf->events),
 		fileProc,&arg->pPollItems[idx]);
 }
 void deleteFileEvent(stCoEpoll_t *ctx, stTimeoutItem_t *clientData,size_t idx)
@@ -78,7 +90,7 @@ void deleteFileEvent(stCoEpoll_t *ctx, stTimeoutItem_t *clientData,size_t idx)
 	stPoll_t *arg=(stPoll_t*)clientData;
     aeDeleteFileEvent((aeEventLoop*)ctx->eventLoop,
 		arg->pPollItems[idx].pSelf->fd, 
-		PollEvent2AE(arg->pPollItems[idx].pSelf->events));
+		PollEvent2Me(arg->pPollItems[idx].pSelf->events));
 }
 long long createTimeEvent(stCoEpoll_t *ctx, long long milliseconds, stTimeoutItem_t *clientData)
 {
