@@ -27,7 +27,7 @@ The library is still in continuous improvement, mainly to support several mainst
 Libcoevent的使用比较简单。
 
 ```bash
-$ cd /path/to/libco
+$ cd /path/to/libcoevent
 $ make
 ```
 注意点：
