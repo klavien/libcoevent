@@ -58,7 +58,7 @@ void    co_reset(stCoRoutine_t * co);
 stCoRoutine_t *co_self();
 
 int		co_poll( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeout_ms );
-void 	co_eventloop( stCoEpoll_t *ctx,pfn_co_eventloop_t pfn,void *arg );
+int		co_eventloop( stCoEpoll_t *ctx,pfn_co_eventloop_t pfn,void *arg );
 int co_seteventloop(void *loop);
 
 //3.specific

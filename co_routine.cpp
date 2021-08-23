@@ -322,7 +322,7 @@ struct stTimeoutItemLink_t;
 struct stTimeoutItem_t;
 struct stCoEpoll_t
 {
-	int iEpollFd;
+	void *eventLoop;
 	static const int _EPOLL_SIZE = 1024 * 10;
 
 	struct stTimeout_t *pTimeout;
@@ -332,8 +332,6 @@ struct stCoEpoll_t
 	struct stTimeoutItemLink_t *pstActiveList;
 
 	co_epoll_res *result; 
-
-	void *eventLoop;
 };
 typedef void (*OnPreparePfn_t)( stTimeoutItem_t *,struct epoll_event &ev, stTimeoutItemLink_t *active );
 typedef void (*OnProcessPfn_t)( stTimeoutItem_t *);
@@ -708,11 +706,7 @@ struct stPoll_t : public stTimeoutItem_t
 
 	int iAllEventDetach;
 
-	int iEpollFd;
-
 	int iRaiseCnt;
-
-
 };
 struct stPollItem_t : public stTimeoutItem_t
 {
@@ -721,37 +715,6 @@ struct stPollItem_t : public stTimeoutItem_t
 
 	struct epoll_event stEvent;
 };
-/*
- *   EPOLLPRI 		POLLPRI    // There is urgent data to read.  
- *   EPOLLMSG 		POLLMSG
- *
- *   				POLLREMOVE
- *   				POLLRDHUP
- *   				POLLNVAL
- *
- * */
-static uint32_t PollEvent2Epoll( short events )
-{
-	uint32_t e = 0;	
-	if( events & POLLIN ) 	e |= EPOLLIN;
-	if( events & POLLOUT )  e |= EPOLLOUT;
-	if( events & POLLHUP ) 	e |= EPOLLHUP;
-	if( events & POLLERR )	e |= EPOLLERR;
-	if( events & POLLRDNORM ) e |= EPOLLRDNORM;
-	if( events & POLLWRNORM ) e |= EPOLLWRNORM;
-	return e;
-}
-static short EpollEvent2Poll( uint32_t events )
-{
-	short e = 0;	
-	if( events & EPOLLIN ) 	e |= POLLIN;
-	if( events & EPOLLOUT ) e |= POLLOUT;
-	if( events & EPOLLHUP ) e |= POLLHUP;
-	if( events & EPOLLERR ) e |= POLLERR;
-	if( events & EPOLLRDNORM ) e |= POLLRDNORM;
-	if( events & EPOLLWRNORM ) e |= POLLWRNORM;
-	return e;
-}
 
 static __thread stCoRoutineEnv_t* gCoEnvPerThread = NULL;
 static __thread void* gCoLoopPerThread= NULL;
@@ -786,129 +749,21 @@ void OnPollProcessEvent( stTimeoutItem_t * ap )
 	co_resume( co );
 }
 
-void OnPollPreparePfn( stTimeoutItem_t * ap,struct epoll_event &e,stTimeoutItemLink_t *active )
-{
-	stPollItem_t *lp = (stPollItem_t *)ap;
-	lp->pSelf->revents = EpollEvent2Poll( e.events );
-
-
-	stPoll_t *pPoll = lp->pPoll;
-	pPoll->iRaiseCnt++;
-
-	if( !pPoll->iAllEventDetach )
-	{
-		pPoll->iAllEventDetach = 1;
-
-		RemoveFromLink<stTimeoutItem_t,stTimeoutItemLink_t>( pPoll );
-
-		AddTail( active,pPoll );
-
-	}
-}
-
-
 #include "3party_loop/interface.h"
-void co_eventloop( stCoEpoll_t *ctx,pfn_co_eventloop_t pfn,void *arg )
-{
-#if !USE_LIBCO_LOOP
-	eventLoopRun(ctx);
-#else
-	if( !ctx->result )
-	{
-		ctx->result =  co_epoll_res_alloc( stCoEpoll_t::_EPOLL_SIZE );
-	}
-	co_epoll_res *result = ctx->result;
 
-
-	for(;;)
-	{
-		int ret = co_epoll_wait( ctx->iEpollFd,result,stCoEpoll_t::_EPOLL_SIZE, 1 );
-
-		stTimeoutItemLink_t *active = (ctx->pstActiveList);
-		stTimeoutItemLink_t *timeout = (ctx->pstTimeoutList);
-
-		memset( timeout,0,sizeof(stTimeoutItemLink_t) );
-
-		for(int i=0;i<ret;i++)
-		{
-			stTimeoutItem_t *item = (stTimeoutItem_t*)result->events[i].data.ptr;
-			if( item->pfnPrepare )
-			{
-				item->pfnPrepare( item,result->events[i],active );
-			}
-			else
-			{
-				AddTail( active,item );
-			}
-		}
-
-
-		unsigned long long now = GetTickMS();
-		TakeAllTimeout( ctx->pTimeout,now,timeout );
-
-		stTimeoutItem_t *lp = timeout->head;
-		while( lp )
-		{
-			//printf("raise timeout %p\n",lp);
-			lp->bTimeout = true;
-			lp = lp->pNext;
-		}
-
-		Join<stTimeoutItem_t,stTimeoutItemLink_t>( active,timeout );
-
-		lp = active->head;
-		while( lp )
-		{
-
-			PopHead<stTimeoutItem_t,stTimeoutItemLink_t>( active );
-            if (lp->bTimeout && now < lp->ullExpireTime) 
-			{
-				int ret = AddTimeout(ctx->pTimeout, lp, now);
-				if (!ret) 
-				{
-					lp->bTimeout = false;
-					lp = active->head;
-					continue;
-				}
-			}
-			if( lp->pfnProcess )
-			{
-				lp->pfnProcess( lp );
-			}
-
-			lp = active->head;
-		}
-		if( pfn )
-		{
-			if( -1 == pfn( arg ) )
-			{
-				break;
-			}
-		}
-
-	}
-	co_epoll_res_free(ctx->result);
-#endif
-}
 void OnCoroutineEvent( stTimeoutItem_t * ap )
 {
 	stCoRoutine_t *co = (stCoRoutine_t*)ap->pArg;
 	co_resume( co );
 }
 
-
 stCoEpoll_t *AllocEpoll()
 {
 	stCoEpoll_t *ctx = (stCoEpoll_t*)calloc( 1,sizeof(stCoEpoll_t) );
-
-	ctx->iEpollFd = co_epoll_create( stCoEpoll_t::_EPOLL_SIZE );
+	ctx->eventLoop=(gCoLoopPerThread?gCoLoopPerThread:createEventLoop());
 	ctx->pTimeout = AllocTimeout( 60 * 1000 );
-	
 	ctx->pstActiveList = (stTimeoutItemLink_t*)calloc( 1,sizeof(stTimeoutItemLink_t) );
 	ctx->pstTimeoutList = (stTimeoutItemLink_t*)calloc( 1,sizeof(stTimeoutItemLink_t) );
-#if !USE_LIBCO_LOOP
-	ctx->eventLoop=(gCoLoopPerThread?gCoLoopPerThread:createEventLoop());
-#endif
 	return ctx;
 }
 
@@ -948,14 +803,12 @@ int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeou
 	{
 		timeout = INT_MAX;
 	}
-	int epfd = ctx->iEpollFd;
 	stCoRoutine_t* self = co_self();
 
 	//1.struct change
 	stPoll_t& arg = *((stPoll_t*)malloc(sizeof(stPoll_t)));
 	memset( &arg,0,sizeof(arg) );
 
-	arg.iEpollFd = epfd;
 	arg.fds = (pollfd*)calloc(nfds, sizeof(pollfd));
 	arg.nfds = nfds;
 
@@ -982,17 +835,8 @@ int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeou
 		arg.fds[i].events=fds[i].events;
 		arg.pPollItems[i].pSelf = arg.fds + i;
 		arg.pPollItems[i].pPoll = &arg;
-		arg.pPollItems[i].pfnPrepare = OnPollPreparePfn;
-#if !USE_LIBCO_LOOP
 		int ret=createFileEvent(ctx,&arg,i);
 		if (ret < 0 && nfds == 1 && pollfunc != NULL)
-#else
-		struct epoll_event &ev = arg.pPollItems[i].stEvent;
-		ev.data.ptr = arg.pPollItems + i;
-		ev.events = PollEvent2Epoll( fds[i].events );
-		int ret = co_epoll_ctl( epfd,EPOLL_CTL_ADD, fds[i].fd, &ev );
-		if (ret < 0 && errno == EPERM && nfds == 1 && pollfunc != NULL)
-#endif
 		{
 			if( arg.pPollItems != arr )
 			{
@@ -1006,25 +850,14 @@ int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeou
 	}
 	//3.add timeout
 	int iRaiseCnt = 0;
-#if !USE_LIBCO_LOOP
 	int ret=createTimeEvent(ctx,timeout,&arg);
-	if(ret<0)
-	{
-		errno=EINVAL;
-		iRaiseCnt=-1;
-	}
-#else
-	unsigned long long now = GetTickMS();
-	arg.ullExpireTime = now + timeout;
-	int ret = AddTimeout( ctx->pTimeout,&arg,now );
 	if( ret != 0 )
 	{
-		co_log_err("CO_ERR: AddTimeout ret %d now %lld timeout %d arg.ullExpireTime %lld",
-				ret,now,timeout,arg.ullExpireTime);
+		//co_log_err("CO_ERR: AddTimeout ret %d now %lld timeout %d arg.ullExpireTime %lld",
+			//	ret,now,timeout,arg.ullExpireTime);
 		errno = EINVAL;
 		iRaiseCnt = -1;
 	}
-#endif
     else
 	{
 		co_yield_env( co_get_curr_thread_env() );
@@ -1032,7 +865,6 @@ int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeou
 	}
 
     {
-#if !USE_LIBCO_LOOP
 		deleteTimeEvent(ctx->eventLoop,&arg);
 		for(nfds_t i = 0;i < nfds;i++)
 		{
@@ -1043,19 +875,6 @@ int co_poll_inner( stCoEpoll_t *ctx,struct pollfd fds[], nfds_t nfds, int timeou
 			}
 			fds[i].revents=arg.fds[i].revents;
 		}
-#else
-		//clear epoll status and memory
-		RemoveFromLink<stTimeoutItem_t,stTimeoutItemLink_t>( &arg );
-		for(nfds_t i = 0;i < nfds;i++)
-		{
-			int fd = fds[i].fd;
-			if( fd > -1 )
-			{
-				co_epoll_ctl( epfd,EPOLL_CTL_DEL,fd,&arg.pPollItems[i].stEvent );
-			}
-			fds[i].revents = arg.fds[i].revents;
-		}
-#endif
 		if( arg.pPollItems != arr )
 		{
 			free( arg.pPollItems );
@@ -1167,11 +986,10 @@ int co_cond_signal( stCoCond_t *si )
 		return 0;
 	}
 	stCoEpoll_t *ctx=co_get_curr_thread_env()->pEpoll;
-#if !USE_LIBCO_LOOP
 	deleteTimeEvent(ctx->eventLoop,&sp->timeout);
+#if !USE_LIBCO_LOOP
 	createTimeEvent(ctx,0,&sp->timeout);
 #else
-	RemoveFromLink<stTimeoutItem_t,stTimeoutItemLink_t>( &sp->timeout );
 	AddTail(ctx->pstActiveList,&sp->timeout );
 #endif
 
@@ -1184,11 +1002,10 @@ int co_cond_broadcast( stCoCond_t *si )
 		stCoCondItem_t * sp = co_cond_pop( si );
 		if( !sp ) return 0;
 		stCoEpoll_t *ctx=co_get_curr_thread_env()->pEpoll;
-#if !USE_LIBCO_LOOP
 		deleteTimeEvent(ctx->eventLoop,&sp->timeout);
+#if !USE_LIBCO_LOOP
 		createTimeEvent(ctx,0,&sp->timeout);
 #else
-		RemoveFromLink<stTimeoutItem_t,stTimeoutItemLink_t>( &sp->timeout );
 		AddTail(ctx->pstActiveList,&sp->timeout );
 #endif
 	}
@@ -1206,16 +1023,8 @@ int co_cond_timedwait( stCoCond_t *link,int ms )
 	stCoEpoll_t *ctx=co_get_curr_thread_env()->pEpoll;
 	if( ms > 0 )
 	{
-#if !USE_LIBCO_LOOP
 		int ret=createTimeEvent(ctx,ms,&psi->timeout);
-		if(ret<0)
-#else
-		unsigned long long now = GetTickMS();
-		psi->timeout.ullExpireTime = now + ms;
-
-		int ret = AddTimeout(ctx->pTimeout,&psi->timeout,now );
 		if( ret != 0 )
-#endif
 		{
 			free(psi);
 			return ret;

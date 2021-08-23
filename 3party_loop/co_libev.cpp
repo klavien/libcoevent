@@ -36,8 +36,10 @@ static void dummyProc(EV_P_ ev_timer *ev, int events)
     UNUSED(ev);
     UNUSED(events);
 }
-int eventLoopRun(stCoEpoll_t *ctx)
+int co_eventloop( stCoEpoll_t *ctx,pfn_co_eventloop_t pfn,void *arg )
 {
+    UNUSED(pfn);
+    UNUSED(arg);
     /*
     // Sometimes,you need this,
     // it just keep liev alive when there is no event on loop.
@@ -108,7 +110,7 @@ void deleteFileEvent(stCoEpoll_t *ctx, stTimeoutItem_t *clientData,size_t idx)
     }
     free(ev);
 }
-long long createTimeEvent(stCoEpoll_t *ctx, long long milliseconds, stTimeoutItem_t *clientData)
+int createTimeEvent(stCoEpoll_t *ctx, long long milliseconds, stTimeoutItem_t *clientData)
 {
     ev_timer *et=(ev_timer*)malloc(sizeof(*et));
     if(!et) return -1;

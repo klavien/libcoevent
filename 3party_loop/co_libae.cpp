@@ -26,10 +26,12 @@ void *createEventLoop()
 {
 	// note!!!    1024*10 may not enouth to use,
 	// then you should adjust it manually by aeResizeSetSize().
-	return aeCreateEventLoop(1024*10);
+	return aeCreateEventLoop(stCoEpoll_t::_EPOLL_SIZE);
 }
-int eventLoopRun(stCoEpoll_t *ctx)
+int co_eventloop( stCoEpoll_t *ctx,pfn_co_eventloop_t pfn,void *arg )
 {
+	UNUSED(pfn);
+    UNUSED(arg);
 	aeMain((aeEventLoop *)ctx->eventLoop);
 	return 0;
 }
@@ -92,10 +94,10 @@ void deleteFileEvent(stCoEpoll_t *ctx, stTimeoutItem_t *clientData,size_t idx)
 		arg->pPollItems[idx].pSelf->fd, 
 		PollEvent2Me(arg->pPollItems[idx].pSelf->events));
 }
-long long createTimeEvent(stCoEpoll_t *ctx, long long milliseconds, stTimeoutItem_t *clientData)
+int createTimeEvent(stCoEpoll_t *ctx, long long milliseconds, stTimeoutItem_t *clientData)
 {
 	clientData->timerId=aeCreateTimeEvent((aeEventLoop*)ctx->eventLoop,milliseconds, timeProc, clientData, 0);
-	return clientData->timerId;
+	return 0;
 }
 int deleteTimeEvent(void *eventLoop, stTimeoutItem_t *clientData)
 {
