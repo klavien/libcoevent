@@ -37,7 +37,7 @@ Because I used libev for testing locally, the pre-defined macro USE_LIBEV of lib
 
 支持的事件库及宏定义如下：
 
-1. libco原生 --> 不加任何USE_*宏定义 (已支持)  
+1. libco原生 --> USE_LIBCO (已支持)  
 
 2. libev    --> USE_LIBEV    (已支持)  
 
